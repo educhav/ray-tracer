@@ -1,95 +1,71 @@
 use std::fs;
-use std::ops;
+pub mod vec;
+pub mod ray;
 
-struct Vec3 {
-    v: Vec<f32>
-}
+use crate::vec::{Color, Point, Vec3};
+use crate::ray::Ray;
 
-impl Vec3 {
-    fn new(x: f32, y: f32, z: f32) -> Vec3 {
-        Vec3 {
-            v: vec![x, y, z]
-        }
+fn ray_color(ray: &Ray) -> Color {
+    if hit_sphere(Point::new(0.0,0.0,-1.0), 0.5, ray) {
+        return Color::new(1.0, 0.0, 0.0);
     }
+    let unit_direction = Vec3::unit_vector(ray.direction());
+    let t = 0.5*(unit_direction.y() + 1.0);
+    return Color::new(1.0,1.0,1.0)*(1.0-t) + Color::new(0.5,0.7,1.0)*t;
 }
 
-impl ops::Add<Vec3> for Vec3 {
-    type Output = Vec3;
-    fn add(mut self, _rhs: Vec3) -> Vec3 {
-        self.v[0] += _rhs.v[0];
-        self.v[1] += _rhs.v[1];
-        self.v[2] += _rhs.v[2];
-        return self;
-    }
+fn format_color(color: &Color) -> String {
+    return format!("{} {} {}\n", 
+                       (color.x() * 255.0) as i32, 
+                       (color.y() * 255.0) as i32, 
+                       (color.z() * 255.0) as i32);
 }
 
-impl ops::Div<f32> for Vec3 {
-    type Output = Vec3;
-    fn div(mut self, _rhs: f32) -> Vec3 {
-        self.v[0] /= _rhs;
-        self.v[1] /= _rhs;
-        self.v[2] /= _rhs;
-        return self;
-    }
+fn hit_sphere(center: Point, radius: f32, ray: &Ray) -> bool {
+    let oc = ray.origin() - center;
+    let a = Vec3::dot(ray.direction(), ray.direction());
+    let b = 2.0 * Vec3::dot(oc, ray.direction());
+    let c = Vec3::dot(oc, oc) - (radius*radius);
+    let discriminant = b*b - 4.0*a*c;
+    return discriminant > 0.0;
 }
-impl ops::Mul<f32> for Vec3 {
-    type Output = Vec3;
-    fn mul(mut self, _rhs: f32) -> Vec3 {
-        self.v[0] *= _rhs;
-        self.v[1] *= _rhs;
-        self.v[2] *= _rhs;
-        return self;
-    }
-}
-
-impl ops::Neg for Vec3 {
-    type Output = Vec3;
-    fn neg(mut self) -> Vec3 {
-        self.v[0] = -self.v[0];
-        self.v[1] = -self.v[1];
-        self.v[2] = -self.v[2];
-        return self;
-    }
-
-}
-
-impl ops::Index<usize> for Vec3 {
-    type Output = f32;
-    fn index(&self, _rhs: usize) -> &f32 {
-        return &self.v[_rhs as usize];
-    }
-}
-
-impl ops::IndexMut<usize> for Vec3 {
-    fn index_mut(&mut self, _rhs: usize) -> &mut f32 {
-        return &mut self.v[_rhs as usize];
-    }
-}
-
 
 fn main() {
+    // Image
+    let aspect_ratio = 16.0 / 9.0;
+    let width = 400;
+    let height = ((width as f32) / aspect_ratio) as i32;
+    println!("height: {}", height);
 
-    let width = 256;
-    let height = 256;
+    // Camera
+    let viewport_height = 2.0;
+    let viewport_width = aspect_ratio * viewport_height;
+    println!("viewport width: {}", viewport_width);
+    let focal_length = 1.0;
+
+    let origin = Point::new(0.0, 0.0, 0.0);
+    let horizontal = Vec3::new(viewport_width, 0.0, 0.0);
+    let vertical = Vec3::new(0.0, viewport_height, 0.0);
+    let lower_left_corner = origin - (horizontal/2.0) - (vertical/2.0) - Vec3::new(0.0, 0.0, focal_length);
 
     let mut contents = String::new();
     contents.push_str(&format!("P3\n{} {}\n255\n", width, height));
+    
 
     for j in (0..height).rev() {
         // eprintln!("Scanlines remaining: {}", j);
         for i in 0..width {
-            contents.push_str(&format!("{} {} {}\n", i, j, 65));
+            let u = (i as f32) / ((width as f32) - 1.0);
+            let v = (j as f32) / ((height as f32) - 1.0);
+            // eprintln!("u:{}\nv:{}\n", u, v);
+            let ray = Ray::new(origin, lower_left_corner + (horizontal*u) + (vertical*v) - origin);
+            // let color = Color::new(i as f32, j as f32, 65.0);
+            let color = ray_color(&ray);
+            contents.push_str(&format_color(&color));
         }
     }
-
     match fs::write("image.ppm", contents) {
         Ok(it) => it,
         Err(_) => panic!("Couldn't write to file"),
     };
-
-    let vec1 = Vec3::new(1.5, 1.0, 1.0);
-    let vec2 = Vec3::new(1.0, 1.0, 1.0);
-    let sum = vec1 + vec2;
-    println!("{}", sum[0]);
-
 } 
